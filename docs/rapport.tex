@@ -1,0 +1,384 @@
+\UseRawInputEncoding
+\documentclass[12pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[french]{babel}
+\usepackage{geometry}
+\usepackage{hyperref}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{listings}
+\usepackage{multicol}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{caption}
+\usepackage{fancyhdr}
+\usepackage{enumitem}
+\usepackage{siunitx}
+\usepackage{xcolor}
+\usepackage{textcomp}
+\geometry{margin=2.5cm}
+\pagestyle{fancy}
+\setlength{\headheight}{15pt}
+\fancyhf{}
+\rhead{Cohortes \& Rétention}
+\lhead{M. A. KHAMLICHI}
+\cfoot{\thepage}
+
+\definecolor{lightgray}{gray}{0.95}
+\lstset{
+  basicstyle=\ttfamily\footnotesize,
+  backgroundcolor=\color{lightgray},
+  frame=single,
+  breaklines=true
+}
+\DeclareSIUnit{\euro}{\text{\texteuro}}
+
+\title{\textbf{Rapport complet -- Cohortes \& Rétention (SQL + Python)}}
+\author{Mohammed Amine KHAMLICHI}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\section*{Résumé exécutif}
+Ce projet démontre de bout en bout comment un data analyste peut :
+\begin{itemize}[noitemsep]
+  \item générer des données e-commerce synthétiques et reproductibles ;
+  \item calculer la rétention par cohorte en Python et en SQL avec parité garantie ;
+  \item produire des visuels (EDA, heatmap) et des insights prêts à être communiqués ;
+  \item industrialiser la démarche via tests automatisés, linting et CI.
+\end{itemize}
+Jeu de référence : 600 utilisateurs, 942 commandes, seed 42 (janvier 2023 -- décembre 2024).
+
+\begin{center}
+  \begin{tabular}{@{}ll@{}}
+    \toprule
+    KPI & Valeur \\
+    \midrule
+    Rétention moyenne M+1 & 23.6\,\% (meilleure cohorte juillet 2023 : 45.8\,\%) \\
+    Rétention moyenne M+3 & 7.4\,\% \\
+    Taille médiane de cohorte & 24 clients \\
+    AOV (Average Order Value) & \(\approx \SI{51}{\euro}\) \\
+    \bottomrule
+  \end{tabular}
+\end{center}
+
+Au-delà des chiffres, le rapport met en lumière la valeur ajoutée méthodologique : gouvernance des jeux de données synthétiques, articulation Python/SQL, automatisation des tests et capacité à transformer un flux analytique en récit business compréhensible pour un décideur.
+
+\section{Contexte professionnel}
+Objectif : fournir un artefact GitHub convaincant pour un recrutement en alternance Data Analyst :
+\begin{itemize}
+  \item chaîne analytique complète (données synthétiques \(\rightarrow\) SQL \(\rightarrow\) Python \(\rightarrow\) visualisations) ;
+  \item livrables exploitables par un décideur (insights, recommandations documentées) ;
+  \item preuves de maturité technique (tests, CI, qualité logicielle, reproductibilité).
+\end{itemize}
+
+\subsection*{Public cible et promesse de valeur}
+\paragraph{Recruteurs \& managers.} Cadrage métier, génération de données, modélisation, restitution. Livrables réutilisables.
+
+\paragraph{Pair-programming \& mentorat.} Conventions de style, tests automatisés, structure modulaire et commentaires ciblés facilitent la revue et l'onboarding.
+
+\subsection*{Enjeux métiers}
+\begin{itemize}
+  \item \textbf{Mesure fiable de la rétention} : comparer des cohortes dans le temps et identifier les campagnes performantes.
+  \item \textbf{Capacité à simuler} : données synthétiques sans contrainte PII.
+  \item \textbf{Capitalisation documentaire} : README, case study et présent rapport comme kit prêt à l'emploi.
+\end{itemize}
+
+\section{Présentation générale du dépôt}
+\begin{multicols}{2}
+\begin{itemize}[leftmargin=*]
+  \item \texttt{src/} : scripts Python (génération, rétention, CLI).
+  \item \texttt{sql/} : schéma et requête analytiques.
+  \item \texttt{notebooks/} : EDA et heatmap (auto-import du module \texttt{src}).
+  \item \texttt{tests/} : Pytest (unit + CLI + DuckDB).
+  \item \texttt{docs/} : documentation technique, case study, rapport.
+  \item \texttt{.github/workflows/} : CI flake8 + pytest.
+\end{itemize}
+\end{multicols}
+
+Conventions :
+\begin{itemize}
+  \item \textbf{Nommer par fonctionnalité} (génération, analytics).
+  \item \textbf{Séparer code et artefacts} : \texttt{data/}, \texttt{outputs/} ignorés par Git, régénérés via Makefile.
+  \item \textbf{Documenter au plus près} : README ciblés (ex : \texttt{data/README.md}).
+\end{itemize}
+
+\section{Objectifs détaillés}
+\subsection{Objectifs analytiques}
+\begin{enumerate}
+  \item Simuler un dataset cohérent pour tester des KPI de fidélisation sans contrainte RGPD.
+  \item Produire une matrice de rétention par cohorte (table, heatmap, insights).
+  \item Assurer la parité SQL/Python pour un déploiement warehouse.
+\end{enumerate}
+Résultats attendus : reproductibilité (hash stable), écart \(<0.1\%\) SQL vs pandas, insights générés automatiquement.
+
+\subsection{Objectifs techniques}
+\begin{enumerate}
+  \item Versionner la pipeline avec instructions d'installation claires.
+  \item Inclure tests, flake8, CI GitHub Actions.
+  \item Offrir des notebooks reproductibles.
+\end{enumerate}
+Critères de succès : \texttt{make test} OK sur runner propre ; notebooks rejouables après \texttt{pip install -r requirements.txt} ; scénarios métier documentés.
+
+\section{Jeu de données synthétique}
+\subsection{Modélisation des utilisateurs}
+\begin{itemize}[noitemsep]
+  \item \texttt{signup\_date} uniforme entre janvier 2023 et décembre 2024.
+  \item RNG : \texttt{numpy.random.default\_rng(seed)} pour la reproductibilité.
+  \item 600 lignes triées chronologiquement.
+\end{itemize}
+
+\subsection{Modélisation des commandes}
+\begin{itemize}[noitemsep]
+  \item Premier achat : offset aléatoire 0--19 jours après \texttt{signup\_date}.
+  \item 1 à 5 achats par utilisateur ; probabilité de churn à chaque étape (\(p=0{,}5\)).
+  \item Intervalles 15--60 jours ; montants \(\sim N(50,20)\) tronqués à [5;300], arrondis à 2 décimales.
+\end{itemize}
+
+\subsection{Structure finale}
+\begin{center}
+\begin{tabular}{@{}lll@{}}
+\toprule
+Fichier & Colonnes & Détails \\
+\midrule
+\texttt{users.csv} & \texttt{user\_id}, \texttt{signup\_date} & 600 lignes, triées par date \\
+\texttt{orders.csv} & \texttt{order\_id}, \texttt{user\_id}, \texttt{order\_date}, \texttt{amount} & 942 lignes, jointure simple \\
+\texttt{outputs/retention.csv} & \texttt{cohort\_month}, \texttt{cohort\_size}, \(0..7\) & Matrice \% actifs \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Contrôles automatiques : doublons \texttt{order\_id}, dates valides ; vérifications exploratoires dans les notebooks.
+
+\section{Architecture logicielle}
+\subsection{Génération (Python)}
+\texttt{src/generate\_data.py} :
+\begin{itemize}
+  \item \texttt{GenerationConfig} : \texttt{n\_users}, \texttt{seed}, \texttt{start}, \texttt{end}.
+  \item \texttt{generate\_users}, \texttt{generate\_orders}, CLI (\texttt{--n-users}, \texttt{--seed}, \texttt{--users-output}, \texttt{--orders-output}).
+  \item Logging du nombre de lignes écrites et création des dossiers.
+\end{itemize}
+
+\subsection{Calcul de rétention}
+\texttt{src/retention.py} :
+\begin{itemize}
+  \item Validation stricte (colonnes obligatoires, dates convertibles, dataset non vide).
+  \item \texttt{cohort\_month}, \texttt{order\_month}, \texttt{month\_index} \(= 12 \times \text{année} + \text{mois}\).
+  \item Pivot des actifs distincts, \texttt{cohort\_size} en M0, pourcentages arrondis à 0.1.
+  \item Insights : taille médiane, moyenne M+1 + meilleure cohorte, médiane horizon max, décroissance.
+  \item CLI : \texttt{--input}, \texttt{--output}, \texttt{--insights}; export CSV + impressions.
+\end{itemize}
+Observabilité : \texttt{run\_cli} renvoie \texttt{RetentionSummary} pour instrumentation (Airflow, Dagster).
+
+\subsection{Notebooks}
+\begin{itemize}
+  \item \texttt{01\_eda.ipynb} : volumétrie mensuelle.
+  \item \texttt{02\_retention.ipynb} : table et heatmap (M+0..M+6), ajout automatique du repo au \texttt{sys.path}.
+  \item Captures réutilisables dans README/portfolio.
+\end{itemize}
+
+\subsection{SQL}
+\texttt{sql/queries.sql} (CTE \texttt{first\_purchase}, \texttt{cohort\_index}, \texttt{cohort\_size}, \texttt{retention}); \texttt{retention\_pct} pour parité avec pandas. Compatible DuckDB/PostgreSQL.
+
+\section{Méthodologie analytique}
+\subsection{Chaînage}
+\begin{enumerate}
+  \item Ingestion : lecture des CSV, typage dates, intégrité clés.
+  \item Feature engineering : mois de cohorte, mois de commande, index relatif.
+  \item Agrégation : actifs distincts par (cohorte, index), pivot.
+  \item Normalisation : division par \texttt{cohort\_size}.
+  \item Restitution : CSV, insights, visualisations.
+\end{enumerate}
+
+\subsection{Garde-fous}
+\begin{itemize}
+  \item Erreur bloquante si dataset vide ou colonnes manquantes.
+  \item Dates converties avec \texttt{errors='coerce'} pour détecter les anomalies.
+  \item Cohorte sans M+0 ignorée pour éviter les divisions par zéro.
+\end{itemize}
+
+\section{Parité SQL / Python}
+\subsection{Stratégie}
+\begin{enumerate}
+  \item Exécuter \texttt{build\_retention} côté pandas.
+  \item Charger la même table commandes dans DuckDB (\texttt{con.register}).
+  \item Lancer \texttt{sql/queries.sql} et récupérer \texttt{cohort\_month}, \texttt{month\_index}, \texttt{retention\_pct}.
+  \item Comparer chaque cellule via \texttt{pytest.approx} (tolérance 1e-6).
+\end{enumerate}
+
+\subsection{Bénéfices}
+\begin{itemize}
+  \item Transférabilité warehouse (Snowflake, BigQuery, DuckDB).
+  \item Confiance accrue pour reviewers SQL/Python.
+  \item Préparation aux entretiens : argument de parité.
+\end{itemize}
+
+\section{Workflow analytique}
+\subsection{Vue d'ensemble}
+\begin{enumerate}[label=\alph*)]
+  \item Génération : \texttt{python src/generate\_data.py}.
+  \item Analyse Python : \texttt{python src/retention.py --insights 5}.
+  \item Visualisation : Jupyter Lab + notebooks.
+  \item Analyse SQL : \texttt{.read sql/queries.sql} dans DuckDB/Postgres.
+  \item Documentation : mise à jour \texttt{docs/case\_study.md}, \texttt{README.md}.
+  \item Qualité : \texttt{python -m pytest -q}, flake8, CI.
+\end{enumerate}
+
+\subsection{Commandes principales}
+\begin{lstlisting}
+python src/generate_data.py --n-users 600 --seed 42
+python src/retention.py --input data/orders.csv --output outputs/retention.csv --insights 5
+python -m pytest -q
+python -m jupyter lab
+\end{lstlisting}
+Makefile (option GNU) :
+\begin{lstlisting}
+make install
+make data
+make retention
+make test
+make notebook
+\end{lstlisting}
+Compatible Windows (PowerShell + .\.venv), macOS, Linux.
+
+\section{Analyse des résultats}
+M+0..M+6 : M+0 = 100\,\%, M+1 \(\approx 20{-}30\,\%\), au-delà de M+4 la plupart des cohortes tombent à 0--5\,\%.
+
+Points d'attention : pic M+1 à 45\,\% sur été 2023 ; T1 2024 autour de 15\,\%.
+
+Heatmap : couleurs chaudes = forte activité, froides = faible présence ; filtrable (M+0..M+6).
+
+Insights CLI (exemple) :
+\begin{lstlisting}
+Key insights:
+- Median cohort size: 24 customers.
+- Average M+1 retention: 23.6% (best cohort 2023-07 at 45.8%).
+- Median retention at M+6: 0.0% (max/min 4.8% / 0.0%).
+- Retention decays from 23.6% (M+1) to 0.2% (M+6).
+\end{lstlisting}
+
+\section{Recommandations marketing}
+\begin{enumerate}
+  \item Nurturing D+7 / D+30 (email/SMS/cross-sell) pour remonter M+1 vers 30\,\%.
+  \item Répliquer la cohorte forte juillet 2023 (canal/offre/UX) sur les campagnes futures.
+  \item Programme VIP (P90) : avantages exclusifs pour garder \(>10\,\%\) actifs à M+3.
+  \item Réactivation M+4/M+5 avec offres de retour si décroissance rapide.
+\end{enumerate}
+
+\section{Dimensions techniques}
+\begin{itemize}
+  \item Linting flake8 (\texttt{max-line-length=100}, \texttt{extend-ignore=E203,W503}).
+  \item Pytest : multi-mois, dataset vide, round-trip CLI, parité SQL/Python.
+  \item CI GitHub Actions : flake8 + pytest sur Python 3.11.
+  \item \texttt{.gitignore} : \texttt{.venv}, \texttt{data/*.csv}, \texttt{outputs}, \texttt{.pytest\_cache}.
+\end{itemize}
+
+Packaging : \texttt{requirements.txt} (pandas 2.2, numpy 2.1, etc.). Roadmap : \texttt{pyproject.toml}, hooks \texttt{pre-commit} (bandit, detect-secrets).
+
+\section{Documentation et communication}
+\begin{itemize}
+  \item \textbf{README} : aperçu, architecture, quickstart, pipeline, qualité, roadmap.
+  \item \textbf{docs/documentation.md} : dictionnaire de données, méthode, QA.
+  \item \textbf{docs/case\_study.md} : synthèse business pour portfolio.
+  \item \textbf{docs/rapport.tex} : version détaillée.
+\end{itemize}
+Séquence entretien : URL GitHub \(\rightarrow\) heatmap \(\rightarrow\) case study \(\rightarrow\) rapport PDF.
+
+\section{Plan de test}
+\begin{longtable}{@{}p{6cm}p{8cm}@{}}
+\toprule
+Test & Description \\
+\midrule
+\texttt{test\_retention\_handles\_multi\_month\_churn} & Cohorte avec réactivation à M+2. \\
+\texttt{test\_build\_retention\_empty\_input} & Erreur explicite sur dataset vide. \\
+\texttt{test\_cli\_round\_trip} & Exécute \texttt{retention.py} en sous-processus, contrôle \texttt{cohort\_size} + logs. \\
+\texttt{test\_sql\_query\_retention} & Compare DuckDB (\texttt{sql/queries.sql}) à pandas. \\
+\bottomrule
+\end{longtable}
+Tests manuels : varier \texttt{--n-users}, seed, OS ; futurs : nbval/papermill, benchmarks 10k+ utilisateurs.
+
+\section{Perspectives DataOps et scalabilité}
+\begin{itemize}
+  \item Orchestration (Airflow/Dagster) pour enchaîner génération, calcul, SQL, export.
+  \item Observabilité : Great Expectations, \texttt{dbt tests}, jobs cron GitHub Actions.
+  \item Scalabilité : DuckDB pour plusieurs millions de lignes ; conteneurisation possible.
+\end{itemize}
+
+\section{Roadmap d'amélioration}
+\begin{enumerate}
+  \item Intégrer un orchestrateur (Airflow, Dagster).
+  \item Publier un dashboard Streamlit/Power BI connecté à \texttt{outputs/retention.csv}.
+  \item Ajouter des tests de performance (datasets x10).
+  \item Connecter Great Expectations pour surveiller les distributions.
+  \item Fournir un package Python installable (\texttt{pip install cohort-retention}).
+\end{enumerate}
+
+\section{Synthèse SWOT}
+\begin{multicols}{2}
+\textbf{Forces}
+\begin{itemize}[noitemsep]
+  \item Stack analytique complète.
+  \item Documentation riche (notebooks, README, case study, rapport).
+  \item CI + tests.
+\end{itemize}
+
+\textbf{Faiblesses}
+\begin{itemize}[noitemsep]
+  \item Données purement synthétiques.
+  \item Pipeline non orchestrée (exécution manuelle).
+\end{itemize}
+\columnbreak
+\textbf{Opportunités}
+\begin{itemize}[noitemsep]
+  \item Intégration warehouse / BI.
+  \item Packaging open-source, dashboard public.
+\end{itemize}
+
+\textbf{Menaces}
+\begin{itemize}[noitemsep]
+  \item Besoin de cas métiers variés.
+  \item Concurrence de projets similaires.
+\end{itemize}
+\end{multicols}
+
+\noindent\textbf{Lecture synthétique.} Force : cohérence bout-en-bout et documentation. Frein : données synthétiques ; la roadmap (warehouse, dashboard) y répond.
+
+\section*{Annexe A : structure du dépôt}
+\begin{lstlisting}
+sql_cohort_retention_v2/
+|-- src/
+|-- sql/
+|-- notebooks/
+|-- docs/
+|-- tests/
+|-- data/     (genere)
+|-- outputs/  (genere)
+|-- README.md
+|-- requirements.txt
+|-- Makefile
+`-- .github/workflows/ci.yml
+\end{lstlisting}
+
+\section*{Annexe B : jeu d'essai notebooks}
+\begin{lstlisting}
+from pathlib import Path
+import sys
+import pandas as pd
+from src.retention import build_retention
+
+ROOT = Path('..').resolve()
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+orders = pd.read_csv(ROOT / 'data' / 'orders.csv', parse_dates=['order_date'])
+ret = build_retention(orders)
+ret
+\end{lstlisting}
+
+\bigskip
+\noindent\textit{Contact :} \href{https://www.linkedin.com/in/mohammedaminekhamlichi/}{LinkedIn -- Mohammed Amine KHAMLICHI}.
+
+\end{document}
